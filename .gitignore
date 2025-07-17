@@ -2,3 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+yelp_academic_dataset_*.json
+yelp_academic_dataset_*.json
+.DS_Store
+.Rhistory
+.Rproj.user/
+UC3M_TFM/
+yelp-churn-prediction/
