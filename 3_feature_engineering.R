@@ -13,7 +13,7 @@ plot_theme  <- theme_minimal(base_size = 12, base_family = "sans")
 
 # connect to duckdb
 con <- dbConnect(duckdb::duckdb(),
-                 "yelp_clean.duckdb",
+                 "yelp_final.duckdb",
                  read_only = TRUE)
 
 # BUILD SURVIVAL DATASET TO USE FOR PREDICTIVE MODELS

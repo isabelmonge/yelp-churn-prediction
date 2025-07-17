@@ -10,7 +10,7 @@ dbExecute(con, "INSTALL json;")
 dbExecute(con, "LOAD json;")
 
 # define file paths for each JSON file
-json_dir <- "~/Desktop/TFM"   # change this if your files are in a different folder
+json_dir <- "~/Documents/GitHub/yelp-churn"   # change this if your files are in a different folder
 
 biz_json <- file.path(json_dir, "yelp_academic_dataset_business.json")
 usr_json <- file.path(json_dir, "yelp_academic_dataset_user.json")
