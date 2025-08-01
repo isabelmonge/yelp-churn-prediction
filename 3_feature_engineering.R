@@ -9,7 +9,7 @@ library(GGally) # correlation matrix with ggcorr()
 plot_width  <- 6      
 plot_height <- 4
 plot_dpi    <- 300
-plot_theme  <- theme_minimal(base_size = 12, base_family = "sans")
+plot_theme  <- theme_minimal(base_size = 12, base_family = "times new roman")
 
 # connect to duckdb
 con <- dbConnect(duckdb::duckdb(),

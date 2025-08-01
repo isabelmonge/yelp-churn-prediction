@@ -4,6 +4,8 @@ library(survival) # concordance + ph tools
 library(dplyr) # data wrangling
 library(tidyverse) # data wrangling
 library(knitr) # kable()
+library(gt) # publication-ready tables
+library(webshot2) # publication-ready tables
 
 # load engineered dataset 
 df <- readRDS("yelp_survival.rds")
@@ -76,6 +78,32 @@ results <- tibble(
 ) |>
   arrange(desc(c_index))
 
-kable(results,
-      caption = "impact of adding each snapshot-based variable (c-index on test set)",
-      digits  = 3)
+# create GT table 
+gt_sensitivity <- results |>
+  gt() |>
+  tab_header(title = "Impact of Adding Snapshot-Based Variables") |>
+  cols_label(
+    spec_id = "Variable Added",
+    c_index = "Test C-index"
+  ) |>
+  cols_align(
+    align = "left",
+    columns = spec_id
+  ) |>
+  cols_align(
+    align = "center",
+    columns = c_index
+  ) |>
+  tab_options(
+    table.font.names = "Times New Roman",
+    table.font.size = 14,
+    heading.title.font.size = 16,
+    table.border.top.style = "solid",
+    table.border.bottom.style = "solid"
+  )
+
+# save as PNG
+gtsave(gt_sensitivity, "fig6_sensitivity_analysis_table.png", 
+       vwidth = 1000,
+       vheight = 800,
+       zoom = 5)

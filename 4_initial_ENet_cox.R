@@ -5,6 +5,8 @@ library(dplyr) # data wrangling and manipulation
 library(tidyverse) # data wrangling and manipulation
 library(knitr) # kable()
 library(doParallel) # parallel cv (speeds up model run time)
+library(gt) # publication-ready tables
+library(webshot2) # publication-ready tables
 
 # load dataset
 df <- readRDS("yelp_survival.rds")
@@ -69,8 +71,41 @@ imp_df <- coef(cvmod, s = "lambda.min") |>
     hazard_ratio = round(hazard_ratio, 3)
   )
 
-kable(
-  imp_df,
-  caption = "elastic-net cox – influential predictors",
-  align   = "lrrc"
-)
+# create GT table 
+gt_table <- imp_df |>
+  gt() |>
+  tab_header(title = "Elastic-Net Cox – Influential Predictors") |>
+  cols_label(
+    variable = "Variable",
+    beta = "Beta",
+    hazard_ratio = "Hazard Ratio",
+    effect = "Effect"
+  ) |>
+  cols_align(
+    align = "left",
+    columns = variable
+  ) |>
+  cols_align(
+    align = "right", 
+    columns = c(beta, hazard_ratio)
+  ) |>
+  cols_align(
+    align = "center",
+    columns = effect
+  ) |>
+  tab_source_note(
+    source_note = md(paste("**Test Set C-index:**", round(c_test, 3)))
+  ) |>
+  tab_options(
+    table.font.names = "Times New Roman",
+    table.font.size = 14,
+    heading.title.font.size = 16,
+    table.border.top.style = "solid",
+    table.border.bottom.style = "solid"
+  )
+
+# save as PNG
+gtsave(gt_table, "fig3_full_Enet_variable_imp.png", 
+       vwidth = 1000,
+       vheight = 600,
+       zoom = 5)

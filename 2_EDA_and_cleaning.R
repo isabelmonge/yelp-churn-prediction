@@ -4,12 +4,14 @@ library(dplyr) # data wrangling and manipulation
 library(ggplot2) # graphs/plotting
 library(knitr) # formatted tables with kable()
 library(scales) # comma() and percent() helpers
+library(gt) # publication-ready tables
+library(webshot2) # publication-ready tables
 
 # plot style
 plot_width  <- 6      
 plot_height <- 4
 plot_dpi    <- 300
-plot_theme  <- theme_minimal(base_size = 12, base_family = "sans")
+plot_theme  <- theme_minimal(base_size = 12, base_family = "times new roman")
 
 # connect to duckdb
 con <- dbConnect(duckdb::duckdb(), "yelp_restaurants.duckdb",
@@ -52,17 +54,29 @@ activity_months <- dbGetQuery(con, "
   ORDER  BY month;
 ")
 
-fig1 <- ggplot(activity_months, aes(month, n, colour = type)) +
-  geom_line() +
-  geom_vline(xintercept = as.Date('2020-03-11'), linetype = "dashed",
-             linewidth = 0.6) +
-  labs(title    = "monthly activity (highlighting covid-19 period)",
-       subtitle = "dashed line = WHO pandemic declaration",
-       y        = "rows per month", colour = NULL) +
-  plot_theme +
-  theme(legend.position = "top")
+fig1 <- ggplot(activity_months,
+               aes(month, n, colour = type)) +
+  geom_line(linewidth = 0.7, na.rm = TRUE) +
+  geom_vline(xintercept = as.Date("2020-03-11"),
+             linetype = "dashed", linewidth = 0.5, colour = "grey30") +
+  scale_colour_manual(values = c("reviews" = "#E15759",
+                                 "tips"    = "#00AFC0")) +
+  scale_y_continuous(labels = comma) +
+  scale_x_date(
+    date_breaks = "2 years",
+    date_labels = "%Y",
+    limits      = as.Date(c("2009-01-01", "2022-02-01")),
+    expand      = expansion(mult = c(0, .02))   # 2 % head-room
+  ) +
+  labs(
+    title    = "Monthly activity (highlighting COVID-19 period)",
+    subtitle = "Dashed line = WHO pandemic declaration (11 Mar 2020)",
+    y        = "Rows per month"
+  ) +
+  coord_cartesian(clip = "off") +     # keeps lines from being clipped
+  plot_theme
 print(fig1)
-ggsave("fig1_monthly_activity.png", fig1,
+ggsave("fig1_COVID_EDA.png", fig1,
        width = plot_width, height = plot_height, dpi = plot_dpi)
 
 # I will use data from 2010 through 2019 (inclusive) for my analysis, as
@@ -155,9 +169,7 @@ fig2 <- ggplot(early_churn, aes(outcome, n, fill = outcome)) +
   labs(title = "user outcomes after first action", y = "count") +
   plot_theme +
   theme(legend.position = "none")
-print(fig2)
-ggsave("fig2_user_outcomes.png", fig2,
-       width = plot_width, height = plot_height, dpi = plot_dpi)
+fig2
 
 # keep only users with ≥2 actions
 dbExecute(con, "
@@ -203,24 +215,29 @@ gap_percentiles <- quantile(
   probs = c(.50, .75, .90, .95, .99),
   na.rm  = TRUE
 )
-kable(
-  data.frame(
-    percentile = names(gap_percentiles),
-    days       = as.integer(gap_percentiles)
-  ),
-  caption = "inter-event gap percentiles (days)"
+
+# create table
+percentile_table <- data.frame(
+  Percentile = c("50th", "75th", "90th", "95th", "99th"),
+  Days = round(gap_percentiles, 2)
 )
 
-fig3 <- ggplot(combined_gaps, aes(days_between)) +
-  geom_histogram(bins = 50, fill = "purple", alpha = 0.7) +
-  geom_vline(xintercept = c(73, 325), linetype = "dashed", linewidth = 0.6) +
-  labs(title = "distribution of time between user actions",
-       x = "days between actions") +
-  plot_theme +
-  coord_cartesian(ylim = c(0, 1e6))
-print(fig3)
-ggsave("fig3_gap_distribution.png", fig3,
-       width = plot_width, height = plot_height, dpi = plot_dpi)
+gt_table <- percentile_table %>%
+  gt() %>%
+  tab_header(title = "Gap Percentiles (Days Between Events)") %>%
+  tab_options(
+    table.font.names = "Times New Roman",
+    table.font.size = 12,
+    heading.title.font.size = 14,
+    table.border.top.style = "solid",
+    table.border.bottom.style = "solid"
+  )
+
+# save as PNG
+gtsave(gt_table, "fig2_percentiles_table.png", 
+       vwidth = 800,  
+       vheight = 400, 
+       zoom = 5)       
 
 # The median gap between actions is only 8 days, suggesting that typical 
 # active users post quite frequently. The 75th percentile is 73 days 
@@ -239,53 +256,7 @@ ggsave("fig3_gap_distribution.png", fig3,
 # around holidays, etc.)
 
 
-# COMPARING THRESHOLDS
-# i’ll use 90 days (short-term) vs 365 days (long-term) to see how results differ
-make_status <- function(gap) {
-  last_dates <- dbGetQuery(con, "
-    WITH last_dates AS (
-      SELECT user_id, MAX(date) AS last_date
-      FROM (
-        SELECT user_id, date FROM reviews
-        UNION ALL
-        SELECT user_id, date FROM tips
-      )
-      GROUP BY user_id
-    )
-    SELECT
-      CASE WHEN DATEDIFF('day', ?, last_date) <= ? THEN 'right-censored'
-           ELSE 'complete' END AS status
-    FROM last_dates;
-  ", params = list(end_date, gap))
-  
-  last_dates |>
-    count(status) |>
-    mutate(
-      percentage = percent(n / sum(n)),
-      threshold  = paste(gap, "days")
-    )
-}
-
-combined_status <- bind_rows(
-  make_status(90),
-  make_status(365)
-)
-
-kable(combined_status |> select(threshold, status, n, percentage),
-      caption = "user status under two churn thresholds")
-
-fig4 <- ggplot(combined_status, aes(status, n, fill = status)) +
-  geom_col() +
-  geom_text(aes(label = paste0("\n(", percentage, ")"))) +
-  facet_wrap(~threshold, ncol = 1) +
-  labs(title = "user status distribution under different churn rules",
-       y = "count") +
-  plot_theme +
-  theme(legend.position = "none")
-print(fig4)
-ggsave("fig4_status_distribution.png", fig4,
-       width = plot_width, height = plot_height, dpi = plot_dpi)
-
+æ
 # Modeling Implications
 
 # The choice of threshold impacts our view of user activity:
