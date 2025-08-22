@@ -60,20 +60,20 @@ fig1 <- ggplot(activity_months,
   geom_vline(xintercept = as.Date("2020-03-11"),
              linetype = "dashed", linewidth = 0.5, colour = "grey30") +
   scale_colour_manual(values = c("reviews" = "#E15759",
-                                 "tips"    = "#00AFC0")) +
+                                 "tips" = "#00AFC0")) +
   scale_y_continuous(labels = comma) +
   scale_x_date(
     date_breaks = "2 years",
     date_labels = "%Y",
     limits      = as.Date(c("2009-01-01", "2022-02-01")),
-    expand      = expansion(mult = c(0, .02))   # 2 % head-room
+    expand      = expansion(mult = c(0, .02))   
   ) +
   labs(
     title    = "Monthly activity (highlighting COVID-19 period)",
     subtitle = "Dashed line = WHO pandemic declaration (11 Mar 2020)",
     y        = "Rows per month"
   ) +
-  coord_cartesian(clip = "off") +     # keeps lines from being clipped
+  coord_cartesian(clip = "off") +     
   plot_theme
 print(fig1)
 ggsave("fig1_COVID_EDA.png", fig1,
@@ -151,25 +151,47 @@ end_date <- dbGetQuery(con, "
 
 # i’ll start with a simple 365-day threshold for dropout
 threshold_365 <- 365
+
 early_churn <- first_second |>
   mutate(
     gap_after_first = as.integer(difftime(coalesce(second_date, end_date),
                                           first_date, units = "days")),
     outcome = case_when(
-      n_events == 1 & gap_after_first > threshold_365 ~ "dropped after first action",
-      n_events == 1                                   ~ "ambiguous (near end)",
-      TRUE                                            ~ "returned"
+      n_events == 1 & gap_after_first > threshold_365 ~ "1 action only",
+      n_events == 1                                   ~ "uncertain (near end)",
+      n_events > 1                                    ~ ">1 action"
     )
   ) |>
   count(outcome)
 
 fig2 <- ggplot(early_churn, aes(outcome, n, fill = outcome)) +
-  geom_col() +
-  geom_text(aes(label = comma(n)), vjust = -0.4) +
-  labs(title = "user outcomes after first action", y = "count") +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = scales::comma(n)), vjust = -0.4, size = 3.2, 
+            family = "Times New Roman") +
+  scale_fill_manual(values = c(
+    "1 action only"        = "#E15759",
+    ">1 action"            = "#00AFC0",
+    "uncertain (near end)" = "grey50"
+  )) +
+  scale_y_continuous(labels = scales::comma,
+                     expand = expansion(mult = c(0, .05))) +
+  labs(
+    title    = "Outcomes after first action",
+    subtitle = "Comparing post-activation drop-off with long-term churn",
+    y        = "User Count",
+    x        = "User Outcome"
+  ) +
+  coord_cartesian(clip = "off") +
   plot_theme +
-  theme(legend.position = "none")
+  theme(
+    legend.position = "none",
+    plot.title      = element_text(hjust = 0.5),
+    plot.subtitle   = element_text(hjust = 0.5)
+  )
 fig2
+
+ggsave("figNEW_short_long_churn.png", fig2,
+       width = plot_width, height = plot_height, dpi = plot_dpi)
 
 # keep only users with ≥2 actions
 dbExecute(con, "
