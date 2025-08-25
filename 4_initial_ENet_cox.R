@@ -11,14 +11,18 @@ library(webshot2) # publication-ready tables
 # load dataset
 df <- readRDS("yelp_survival.rds")
 
+# filter out very short-tenure users (< 1 year)
+df_filtered <- df |>
+  filter(tenure_years >= 1)
+
 # build predictor matrix
-xvars <- df |>
+xvars <- df_filtered |>
   select(-user_id, -survival_time, -churned,
          -join_date, -last_post) |>
   mutate(across(where(is.logical), as.numeric)) |>
   as.matrix()
 
-y <- with(df, Surv(survival_time, churned))
+y <- with(df_filtered, Surv(survival_time, churned))
 
 # diagnose non-finite values 
 nonfinite_pct <- colMeans(!is.finite(xvars)) * 100
@@ -26,7 +30,7 @@ print(round(nonfinite_pct[nonfinite_pct > 0], 3))
 # should all be ~0: artefacts from division-by-zero, not real missingness
 
 # train/test split (time-based)
-train_ids <- which(df$join_date <= as.Date("2016-12-31"))
+train_ids <- which(df_filtered$join_date <= as.Date("2016-12-31"))
 
 # subsample large training set for speed
 set.seed(123)
